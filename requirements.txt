@@ -1,0 +1,7 @@
+langchain
+unstructured
+huggingface_hub
+transformers
+sentence-transformers
+accelerate
+bitsandbytes
