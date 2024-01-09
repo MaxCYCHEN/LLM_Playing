@@ -3,7 +3,6 @@ import os
 import time
 
 from langchain.vectorstores import FAISS
-from langchain.document_loaders import PyPDFLoader
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
@@ -22,20 +21,21 @@ import sys
 import torch
 import json
 
-from langchain import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory, ConversationSummaryMemory
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
-from langchain.chains import LLMChain
-from langchain.llms import OpenAI
 from langchain.chat_models import ChatOpenAI
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory, ConversationSummaryMemory
-from langchain import PromptTemplate 
+#from langchain import PromptTemplate 
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
+
+from langchain.embeddings import HuggingFaceInstructEmbeddings
+
+from langchain.embeddings import OpenAIEmbeddings
 
 import APIKEY
 
@@ -47,14 +47,37 @@ class QA_LangChain():
         #self.gptmodel = "gpt-3.5-turbo-1106" #"gpt-3.5-turbo"
         #self.gptmodel = "gpt-4"
         self.gptmodel = "gpt-4-1106-preview"
+        self.mmr_num = 8
 
         # Create the chat prompt templates
-        system_template = """Use the following pieces of context and chat history to answer the question at the end. The context is standard driver C header files of M460 MCU. 
-        Please answer with C Code function as complete as possible.
+        #system_template = """Use the following pieces of context and chat history to answer the question at the end. The context is standard driver C header files of M460 MCU. 
+        #Please answer with C Code function as complete as possible.
+        #If you don't know the answer or the question has nothing to do with code or programing, don't try to make up an answer.
+        #----------------
+        #{context}
+        #{chat_history}"""
+
+        system_template = """Use the following pieces of context and chat history to answer the question at the end. The context is Nuvoton M467 Series Technical Reference Manual.
         If you don't know the answer or the question has nothing to do with code or programing, don't try to make up an answer.
         ----------------
         {context}
         {chat_history}"""
+
+        #system_template = """Use the following pieces of context and chat history to answer the question at the end. The context are M460 MCU standard driver C header files, technical reference manual, 
+        #and NAU8822A datasheet.
+        #If the question is about generating code, please answer with C Code function from the context as complete as possible.
+        #If you don't know the answer or the question has nothing to do with code or programing, don't try to make up an answer.
+        #----------------
+        #{context}
+        #{chat_history}"""
+
+        #system_template = """Use the following pieces of context and chat history to answer the question at the end. The context are M2354 MCU standard driver C header files and technical reference manual.
+        #If the question is about generating code, please answer with C Code function from the context as complete as possible.
+        #Otherwise, answer the M2354 MCU relative question with the context of technical reference manual.
+        #If you don't know the answer or the question has nothing to do with code or programing, don't try to make up an answer.
+        #----------------
+        #{context}
+        #{chat_history}"""
         
         messages = [
         SystemMessagePromptTemplate.from_template(system_template),
@@ -72,12 +95,17 @@ class QA_LangChain():
     def QA_LangChain_RQA_chain(self, input_doc_pth):
         # load embedding model
         print("===== Load the embedding model =====")
-        embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',model_kwargs={'device': 'cpu'})
+        
+        # choose your embeddings model
+        #embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',model_kwargs={'device': 'cpu'})
+        #embeddings = HuggingFaceInstructEmbeddings(model_name='BAAI/bge-small-en',model_kwargs={'device': 'cpu'})
+        embeddings = OpenAIEmbeddings()
+
         vectorstore=FAISS.load_local(input_doc_pth, embeddings)
         
         self.retriever_vec=vectorstore.as_retriever(
         search_type="mmr", # Also test "similarity"
-        search_kwargs={"k": 8})
+        search_kwargs={"k": self.mmr_num})
      
         print("===== Create a ConversationalRetrievalChain chain =====")
         # Normal memory
@@ -171,11 +199,23 @@ class QA_UI():
         #self.doc_path = r'D:\nu_QA_data\m460bsp_SampleCode_StdDriver_wo_headers'
         #self.doc_path = r'D:\nu_QA_data\m460bsp_Library_StdDriver_headers_1000'
         #self.doc_path = r'D:\nu_QA_data\m460bsp_Library_StdDriver'
-        self.doc_path = r'D:\nu_QA_data\m460bsp_Lib_StdDriver_Regs'
+        #self.doc_path = r'D:\nu_QA_data\m460_StdDriver_Regs_openai'
+        #self.doc_path = r'D:\nu_QA_data\M460bsp_with_NuMicro_ISP_Flow_And_Command_Set'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_Series_EN_Rev1.01'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_Series_EN_Rev1.01_openai'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_and_StdDriver_Regs_bge_s'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_and_StdDriver_Regs_NAU8822A_openai'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M2354_and_StdDriver_C_Regs_openai'
+        self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_openai_pypdf'
+        #self.doc_path = r'D:\nu_QA_data\TRM_M463_M467_and_StdDriver_Regs_openai_pypdf'
         
         # We need to initial the llm model when intial the class & can't create another
         self.QA_LangChain_CLS = None
         self.init_chat_qa_bot()
+
+        # save the RQA's docs
+        self.ref_docs = None
+        self.return_msg = ""
 
     def init_chat_qa_bot(self):
         self.QA_LangChain_CLS = QA_LangChain()
@@ -218,6 +258,11 @@ class QA_UI():
                     
                 chatbot = gr.Chatbot(height = 600, show_copy_button = True, scale = 2)
                 msg = gr.Textbox()
+                ref_doc = gr.Textbox(label="Reference documents",
+                                     info="the number is page.",
+                                     lines=1,
+                                     value=" ")
+
                 with gr.Row():
                     enter_button = gr.Button("Enter")
                     save_button = gr.Button("Save")
@@ -260,12 +305,19 @@ class QA_UI():
                 query = history[-1][0]                                         
                 result= self.qa_chain({"question": query})
                 #bot_message = textwrap.fill(result['result'], width=500)
+                
                 bot_message = result['answer']
                                                          
                 history[-1][1] = ""
 
                 history[-1][1] = bot_message
                 #print(history[-1][1])
+
+                self.ref_docs = result['source_documents']
+
+                #for i in range(len(self.ref_docs)):
+                #    print(self.ref_docs[i].metadata['source']) 
+
                 return history
 
                 #for character in bot_message:
@@ -287,18 +339,32 @@ class QA_UI():
                 self.qa_chain.memory.clear()
                 print("create new chat:")
                 print(self.qa_chain.memory)
-                      
+                
+
+            def return_ref_docs():
+                
+                for i in range(len(self.ref_docs)):
+                    if 'page' in self.ref_docs[i].metadata:
+                        self.return_msg += "\n" + str((self.ref_docs[i].metadata['page']+1)) + ","
+                    else: 
+                        self.return_msg += "\n" + self.ref_docs[i].metadata['source'] + ","
+                self.return_msg += "\n" + "---------------------"         
+                return self.return_msg
+
+            def return_ref_docs_clear():
+                self.return_msg = ""
+                return self.return_msg             
                     
             #def delete_model():
             #    del self.qa_chain
         
             # Interactive Section
             msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-                bot, chatbot, chatbot)
+                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc)
             enter_button.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-                bot, chatbot, chatbot)
+                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc)
             clear.click(lambda: None, None, chatbot, queue=False).then(
-                create_new_chain, None, None)
+                create_new_chain, None, None).then(return_ref_docs_clear, None, ref_doc)
             save_button.click(save_chat, chatbot, None)
             #delete_button.click(delete_model, None, queue=False)
             

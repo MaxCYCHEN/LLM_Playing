@@ -1,5 +1,7 @@
 #Your API key
 APIKEY.py
+build/
+dist/
 
 flagged/
 

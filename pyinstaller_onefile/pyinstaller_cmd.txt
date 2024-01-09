@@ -1,0 +1,3 @@
+pyi-makespec --collect-data=gradio_client --collect-data=gradio --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext --onefile ConversationRAGBot_pyi.py
+
+pyinstaller ConversationRAGBot_pyi.spec
