@@ -3,4 +3,7 @@ https://github.com/microsoft/TaskMatrix/issues/242
 2. adding C/C++ paser in langchain
 https://github.com/langchain-ai/langchain/pull/13318/files#
 3. If  use pypdf, need update lib\site-packages\rapidocr_onnxruntime\main.pypdf
-add line156: points_fp32 = points.astype(np.float32)
+	add line156: points_fp32 = points.astype(np.float32)
+4. If want to skep SSL:
+	In Lib\site-packages\tiktoken\load.py line24, adding verify=False
+	Lib\site-packages\openai\_base_client.py, line479 adding verify=False

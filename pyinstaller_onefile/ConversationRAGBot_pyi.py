@@ -2,22 +2,24 @@ import gradio as gr
 import os
 import time
 
-#from langchain.vectorstores import FAISS
-from langchain_community.vectorstores import FAISS
+from langchain.vectorstores import FAISS
+#from langchain_community.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
 import json
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
-from langchain.chat_models import ChatOpenAI
-#from langchain_openai import ChatOpenAI
+#from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 
 #from langchain import PromptTemplate 
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
 
-from langchain.embeddings import OpenAIEmbeddings
-#from langchain_openai import OpenAIEmbeddings
+#from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
+
+from langchain.callbacks import get_openai_callback
 
 import APIKEY
 
@@ -138,6 +140,10 @@ class QA_UI():
         self.ref_docs = None
         self.return_msg = ""
 
+        # save cb info for tokens
+        self.cb_info = None
+        self.tokens_str = ""
+
     def init_chat_qa_bot(self):
         self.QA_LangChain_CLS = QA_LangChain()
         #self.QA_LangChain_CLS.QA_LangChain_RQA_model_create(self.llm_model_path)
@@ -167,8 +173,32 @@ class QA_UI():
         outputs = [gr.Textbox(label='State of loading document', value=self.doc_path.split('\\')[-1])
             ]
         
-        with gr.Blocks() as demo:
-            
+        def return_ref_docs(): 
+            for i in range(len(self.ref_docs)):
+                if 'page' in self.ref_docs[i].metadata:
+                    self.return_msg += "\n" + self.ref_docs[i].metadata['source'] + ":" + str((self.ref_docs[i].metadata['page']+1)) + ","
+                else: 
+                    self.return_msg += "\n" + self.ref_docs[i].metadata['source'] + ","
+            self.return_msg += "\n" + "---------------------"         
+            return self.return_msg
+        
+        def return_tokens():
+            self.tokens_str += f"Total Tokens: {self.cb_info.total_tokens}"
+            self.tokens_str += "\n" + f"Prompt Tokens: {self.cb_info.prompt_tokens}"
+            self.tokens_str += "\n" + f"Completion Tokens: {self.cb_info.completion_tokens}"
+            self.tokens_str += "\n" + f"Total Cost (USD): ${self.cb_info.total_cost}" 
+            self.tokens_str += "\n" + f"---------------------" + "\n"          
+            return self.tokens_str
+        
+        def return_ref_docs_clear():
+                self.return_msg = ""
+                return self.return_msg
+        
+        def return_tokens_clear():
+                self.tokens_str = ""
+                return self.tokens_str
+         
+        with gr.Blocks() as demo:    
             # Layout Section
             with gr.Tab("QA ChatBot"):
                 gr.Markdown(
@@ -184,8 +214,11 @@ class QA_UI():
                     
                 chatbot = gr.Chatbot(height = 600, show_copy_button = True, scale = 2)
                 msg = gr.Textbox()
-                ref_doc = gr.Textbox(label="Reference documents",
+                ref_doc = gr.Textbox(label="Reference Documents",
                                      info="the number is page.",
+                                     lines=1,
+                                     value=" ")
+                cb_tok_box = gr.Textbox(label="Tokens Summarize",
                                      lines=1,
                                      value=" ")
 
@@ -225,7 +258,7 @@ class QA_UI():
                 prompt_oup = gr.Textbox(label="Prompt Now", lines=4, placeholder=self.QA_LangChain_CLS.system_template)
                 up_prompt_btn = gr.Button("Update Prompt")
 
-                @up_prompt_btn.click(inputs=prompt_inp, outputs=prompt_oup)
+                #@up_prompt_btn.click(inputs=prompt_inp, outputs=prompt_oup)
                 def update_prompt(prompt_inp):
                     
                     update_messages = [
@@ -240,6 +273,11 @@ class QA_UI():
                     print(self.qa_chain)
 
                     return prompt_inp
+                
+                # update the prompt, so need to 1. rebuild the RQAchain, 2. clear the chatbox & info
+                up_prompt_btn.click(fn=update_prompt, inputs=prompt_inp, outputs=prompt_oup).then(
+                    lambda: None, None, chatbot, queue=False).then(
+                        return_ref_docs_clear, None, ref_doc).then(return_tokens_clear, None, cb_tok_box)
             
             #with gr.Tab("Documents (ToDo...)"):
             #    file_loader = gr.File(file_count="multiple", file_types=[".txt", ".pdf", ".csv"], height=100)
@@ -265,22 +303,22 @@ class QA_UI():
                 # print(history[-1][0]) 
                 # query = "What is the architecture of NuMicro M23"
                 
-                query = history[-1][0]                                         
-                result= self.qa_chain({"question": query})
-                #bot_message = textwrap.fill(result['result'], width=500)
-                #print(result)
-                
-                bot_message = result['answer']
-                                                         
-                history[-1][1] = ""
+                query = history[-1][0]
+                with get_openai_callback() as cb:                                        
+                    result= self.qa_chain({"question": query})
+                    #bot_message = textwrap.fill(result['result'], width=500)
+                    #print(result)
+                    
+                    bot_message = result['answer']                                      
+                    history[-1][1] = ""
+                    history[-1][1] = bot_message
+                    #print(history[-1][1])
+    
+                    self.ref_docs = result['source_documents']
+                    #for i in range(len(self.ref_docs)):
+                    #    print(self.ref_docs[i].metadata['source'])
 
-                history[-1][1] = bot_message
-                #print(history[-1][1])
-
-                self.ref_docs = result['source_documents']
-
-                #for i in range(len(self.ref_docs)):
-                #    print(self.ref_docs[i].metadata['source']) 
+                    self.cb_info = cb 
 
                 return history
 
@@ -304,31 +342,16 @@ class QA_UI():
                 print("create new chat:")
                 print(self.qa_chain.memory)
                 
-
-            def return_ref_docs():
-                
-                for i in range(len(self.ref_docs)):
-                    if 'page' in self.ref_docs[i].metadata:
-                        self.return_msg += "\n" + str((self.ref_docs[i].metadata['page']+1)) + ","
-                    else: 
-                        self.return_msg += "\n" + self.ref_docs[i].metadata['source'] + ","
-                self.return_msg += "\n" + "---------------------"         
-                return self.return_msg
-
-            def return_ref_docs_clear():
-                self.return_msg = ""
-                return self.return_msg             
-                    
-            #def delete_model():
-            #    del self.qa_chain
-        
             # Interactive Section
             msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc)
+                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc).then(return_tokens, None, cb_tok_box)
+            
             enter_button.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc)
+                bot, chatbot, chatbot).then(return_ref_docs, None, ref_doc).then(return_tokens, None, cb_tok_box)
+            
             clear.click(lambda: None, None, chatbot, queue=False).then(
-                create_new_chain, None, None).then(return_ref_docs_clear, None, ref_doc)
+                create_new_chain, None, None).then(return_ref_docs_clear, None, ref_doc).then(return_tokens_clear, None, cb_tok_box)
+            
             save_button.click(save_chat, chatbot, None)
             #delete_button.click(delete_model, None, queue=False)
             
