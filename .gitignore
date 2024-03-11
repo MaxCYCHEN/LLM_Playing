@@ -1,7 +1,12 @@
 #Your API key
 APIKEY.py
+
 build/
 dist/
+dist*/
+detectron2/
+iopath/
+docs/
 
 flagged/
 
@@ -10,7 +15,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
+# C extensionsf
 *.so
 
 # Distribution / packaging

@@ -7,3 +7,6 @@ https://github.com/langchain-ai/langchain/pull/13318/files#
 4. If want to skep SSL:
 	In Lib\site-packages\tiktoken\load.py line24, adding verify=False
 	Lib\site-packages\openai\_base_client.py, line479 adding verify=False
+	
+5. ModuleNotFoundError: No module named 'tiktoken'
+https://github.com/openai/whisper/discussions/1113
