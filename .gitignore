@@ -1,5 +1,6 @@
 #Your API key
 APIKEY.py
+APIKEY.txt
 
 build/
 dist/
