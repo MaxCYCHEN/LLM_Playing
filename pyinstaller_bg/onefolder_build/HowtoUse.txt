@@ -1,3 +1,0 @@
-1. ConversationRAGBot_bg.exe --model gpt-4-1106-preview --app_type CODEGEN
-2. ConversationRAGBot_bg.exe --model gpt-4-1106-preview --app_type QA
-3. ConversationRAGBot_bg.exe --model gpt-3.5-turbo-1106 --app_type QA

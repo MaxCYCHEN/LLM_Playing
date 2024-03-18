@@ -1,6 +1,0 @@
-{
-    "timestamp": "1705468114218",
-    "chip_type": "M251",
-    "question": "Generate M251 I2C0_Init() code: Open I2C0 and set clock to 100k, Get I2C0 Bus Clock and print it, enable I2C0 interrupt",
-	"langsmith": 1
-}
